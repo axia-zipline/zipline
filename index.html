@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Zipline</title>
+  <meta name="theme-color" content="#0A0C10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Zipline">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" href="icon-192.png">
+  <script src="config.js"></script>
+  <!-- 起動を速くするため、文字はスマホ内蔵のものを使う（外部フォントを待たない）。地図の取得先には先につないでおく。 -->
+  <link rel="preconnect" href="https://maps.googleapis.com">
+  <link rel="preconnect" href="https://maps.gstatic.com" crossorigin>
+  <style>
+    :root {
+      --bg: #0A0C10;
+      --surface: #101419;
+      --surface-2: #171C24;
+      --ink: #EEF2F7;
+      --ink-2: #9AA6B6;
+      --ink-3: #5F6B7C;
+      --line: rgba(255, 255, 255, .08);
+      --line-2: rgba(255, 255, 255, .14);
+      --panel: rgba(14, 17, 22, .74);
+      --brand: #8FBEFF;
+      --brand-grad: linear-gradient(135deg, #7FB2FF 0%, #A78BFA 100%);
+      --ok: #4ADE80;
+      --warn: #FBBF24;
+      --danger: #F87171;
+      --done: #6B7280;
+      --shadow-1: 0 2px 6px rgba(0, 0, 0, .5), 0 12px 32px rgba(0, 0, 0, .42);
+      --shadow-2: 0 18px 50px rgba(0, 0, 0, .62);
+      --r: 18px;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; color: var(--ink);
+      font-family: "Noto Sans JP", "Inter", -apple-system, "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", sans-serif;
+      background: #0A0C10; }
+    #map { position: absolute; inset: 0; }
+    select, button, input, textarea { font-family: inherit; }
+
+    #top { position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+      padding: 10px; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    #top > * { pointer-events: auto; }
+
+    #topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: var(--panel); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
+      border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-1); padding: 10px 13px; }
+    .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+    .brand .logo { display: flex; filter: drop-shadow(0 6px 16px rgba(127, 178, 255, .35)); }
+    .brand .names { display: flex; flex-direction: column; line-height: 1.15; }
+    .brand .names b { font-family: "Inter", sans-serif; font-weight: 800; font-size: 16.5px; letter-spacing: .02em;
+      background: var(--brand-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .brand .names i { font-style: normal; font-size: 10.5px; color: var(--ink-3); font-weight: 500; letter-spacing: .04em; }
+
+    .field { display: flex; flex-direction: column; gap: 3px; }
+    .field label { font-size: 10px; font-weight: 700; color: var(--ink-3); letter-spacing: .1em; text-transform: uppercase; }
+    .field select { appearance: none; font-size: 13.5px; font-weight: 600; color: var(--ink);
+      padding: 8px 30px 8px 12px; border: 1px solid var(--line-2); border-radius: 11px; background-color: var(--surface-2);
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%237C8AA0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+      background-repeat: no-repeat; background-position: right 10px center; cursor: pointer; }
+    #selOperator { min-width: 108px; }
+    #selArea { min-width: 118px; }
+    .count { font-size: 11.5px; font-weight: 700; color: var(--ink-2); background: var(--surface-2);
+      border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; align-self: center; }
+
+    #sessionbar { display: flex; align-items: center; gap: 12px;
+      background: rgba(8, 10, 14, .86); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-2); padding: 9px 11px; }
+    #btnSession { font-size: 14px; font-weight: 800; letter-spacing: .02em; color: #08130C; cursor: pointer;
+      border: none; border-radius: 12px; padding: 11px 18px; background: linear-gradient(135deg, #6EE7A0, #34D399);
+      box-shadow: 0 6px 20px rgba(52, 211, 153, .28); transition: transform .12s ease; }
+    #btnSession:active { transform: scale(.97); }
+    #btnSession.on { background: linear-gradient(135deg, #FCA5A5, #F87171); color: #1A0808; box-shadow: 0 6px 20px rgba(248, 113, 113, .28); }
+    .sess-info { display: flex; align-items: center; gap: 8px; color: #CBD5E1; font-size: 14px; font-weight: 700; }
+    #sessionInfo { font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+    #sessDot { width: 8px; height: 8px; border-radius: 50%; background: #4B5563; }
+    #sessionbar.active #sessDot { background: #34D399; animation: pulse 1.9s infinite; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,.65); } 70% { box-shadow: 0 0 0 9px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
+    .sess-tools { margin-left: auto; display: flex; gap: 6px; }
+    .chip { font-size: 12px; font-weight: 700; color: #B6C2D2; background: rgba(255,255,255,.05);
+      border: 1px solid var(--line); border-radius: 10px; padding: 9px 13px; cursor: pointer; }
+    .chip:active { background: rgba(255,255,255,.12); }
+    .chip.on { color: #0A0C10; background: var(--brand-grad); }
+
+    .fold { display: none; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; cursor: pointer;
+      font-size: 12px; color: #B6C2D2; background: rgba(255,255,255,.05); border: 1px solid var(--line); }
+    /* v2.5 担当・エリアの段（ロゴ・担当・エリア・件数）と作業開始ボタン・待機中は出さない（PC・スマホとも）。
+       担当はログイン中の本人に固定、エリアは常に全エリア。要素は処理のために残して隠すだけ。 */
+    #topbar, #btnSession, .sess-info { display: none !important; }
+    .sess-tools { margin-left: 0; }
+    #sessionbar .fold { margin-left: auto; }
+    /* たたんだ時は ▼ ボタンだけ右上に残す */
+    #top.folded #sessionbar { background: transparent; border: 0; box-shadow: none; padding: 0; justify-content: flex-end;
+      backdrop-filter: none; -webkit-backdrop-filter: none; pointer-events: none; }
+    #top.folded #sessionbar > *:not(.fold) { display: none; }
+    #top.folded .fold { pointer-events: auto; background: var(--panel); box-shadow: var(--shadow-1);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+
+    #banner { display: none; text-align: center; font-size: 12.5px; font-weight: 700; color: #FCD34D;
+      background: rgba(251, 191, 36, .12); border: 1px solid rgba(251, 191, 36, .28); border-radius: 12px;
+      padding: 9px; box-shadow: var(--shadow-1); }
+
+    #legend { position: absolute; left: 12px; bottom: 20px; z-index: 15;
+      background: var(--panel); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-1);
+      padding: 10px 13px; font-size: 12px; color: var(--ink-2); line-height: 1.9; }
+    #legend .row { white-space: nowrap; display: flex; align-items: center; }
+    #legend .note { color: var(--ink-3); font-size: 11px; }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px;
+      box-shadow: 0 0 0 2.5px rgba(255,255,255,.12); }
+
+    #fabs { position: absolute; right: 12px; bottom: 20px; z-index: 15; display: flex; flex-direction: column; gap: 4px;
+      background: var(--panel); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-2); padding: 6px; }
+    .dock-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      width: 60px; padding: 9px 2px 7px; border: none; border-radius: 13px; background: transparent;
+      color: var(--ink-2); cursor: pointer; transition: background .15s, color .15s; }
+    .dock-btn:active { background: rgba(255,255,255,.07); }
+    .dock-btn .ic { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2.1;
+      stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease; }
+    .dock-btn .lb { font-size: 9px; font-weight: 700; letter-spacing: .01em; line-height: 1.1; text-align: center; }
+    .dock-btn.on { color: #0A0C10; background: var(--brand-grad); box-shadow: 0 8px 22px rgba(127, 178, 255, .28); }
+    #btnAdd.on { background: linear-gradient(135deg, #FDA4A4, #F87171); box-shadow: 0 8px 22px rgba(248, 113, 113, .28); }
+    #btnAdd.on .ic { transform: rotate(45deg); }
+    #btnGeo.on { background: linear-gradient(135deg, #67E8F9, #22D3EE); color: #062026; box-shadow: 0 8px 22px rgba(34, 211, 238, .26); }
+    #btnDone.on { background: linear-gradient(135deg, #64748B, #475569); color: #EEF2F7; box-shadow: none; }
+
+    #sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--surface);
+      border-top: 1px solid var(--line-2); border-radius: 24px 24px 0 0; box-shadow: 0 -14px 52px rgba(0, 0, 0, .7);
+      transform: translateY(110%); transition: transform .26s cubic-bezier(.22,.9,.3,1);
+      max-height: 84%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    #sheet.open { transform: translateY(0); }
+    #sheet.half { max-height: 50vh; max-height: 50dvh; }
+    .actions.primary { margin-top: 10px; }
+    .actions.primary button { flex: 1 1 100%; }
+    #sheet .grab { width: 40px; height: 4px; background: #2D3540; border-radius: 99px; margin: 10px auto 4px; }
+    #sheet .grabArea { padding: 2px 0 4px; cursor: pointer; }
+    #sheetClose { position: absolute; top: 10px; right: 12px; width: 36px; height: 36px; border: 0; border-radius: 99px;
+      background: #232A33; color: var(--ink); font-size: 20px; line-height: 36px; text-align: center; cursor: pointer; z-index: 1; }
+    #sheet .inner { padding: 6px 20px 26px; }
+    #sheet h2 { font-size: 18px; font-weight: 800; letter-spacing: .01em; margin: 6px 0 8px; padding-right: 40px; color: var(--ink); }
+    .meta { font-size: 12.5px; color: var(--ink-3); margin-bottom: 6px; }
+    .detail-row { font-size: 13.5px; color: var(--ink-2); margin: 7px 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .detail-row b { color: var(--ink); font-weight: 700; }
+
+    .badge { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 800;
+      padding: 3px 11px; border-radius: 999px; letter-spacing: .03em; }
+    .badge.todo { background: rgba(248, 113, 113, .16); color: #FCA5A5; }
+    .badge.doing { background: rgba(251, 191, 36, .16); color: #FCD34D; }
+    .badge.done { background: rgba(148, 163, 184, .16); color: #94A3B8; }
+
+    .field2 { margin-top: 14px; }
+    .field2 label { font-size: 11px; font-weight: 700; color: var(--ink-3); letter-spacing: .08em;
+      text-transform: uppercase; display: block; margin-bottom: 6px; }
+    .field2 input, .field2 textarea, .field2 select { width: 100%; font-size: 15px; color: var(--ink);
+      padding: 12px 13px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--surface-2);
+      transition: border .15s, box-shadow .15s; }
+    .field2 input::placeholder, .field2 textarea::placeholder { color: #4B5563; }
+    .field2 input:focus, .field2 textarea:focus, .field2 select:focus { outline: none; border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(143, 190, 255, .16); }
+    .field2 select { appearance: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%237C8AA0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+      background-repeat: no-repeat; background-position: right 13px center; }
+    .field2 textarea { min-height: 60px; resize: vertical; }
+    .field2 input[type="file"] { padding: 9px 12px; color: var(--ink-2); font-size: 13.5px; }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+    .actions button { flex: 1 1 46%; padding: 14px 12px; border: none; border-radius: 13px;
+      font-size: 15px; font-weight: 800; letter-spacing: .01em; color: #0A0C10; cursor: pointer;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, .4); transition: transform .12s ease; }
+    .actions button:active { transform: scale(.98); }
+    .b-start { background: linear-gradient(135deg, #93C5FD, #60A5FA); }
+    .b-done { background: linear-gradient(135deg, #6EE7A0, #34D399); }
+    .b-back { background: linear-gradient(135deg, #FCD34D, #F59E0B); }
+    .photoBtn { position: relative; display: block; flex: 1 1 100%; text-align: center; padding: 15px 12px; border-radius: 13px;
+      font-size: 16px; font-weight: 800; color: #0A0C10; cursor: pointer; box-shadow: 0 8px 22px rgba(0, 0, 0, .4);
+      background: linear-gradient(135deg, #93C5FD, #3B82F6); }
+    .photoBtn.busy { opacity: .6; pointer-events: none; }
+    .photoBtn input { position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+    #sheet h2 + .actions.primary { margin-top: 4px; }
+    .detail-row.caution b { color: #FCD34D; }
+    .detail-row .none { color: var(--ink-3); }
+    .moreBtn { display: block; width: 100%; margin: 8px 0 0; padding: 9px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+      color: var(--ink-3); background: transparent; border: 1px solid var(--line); border-radius: 10px; font-family: inherit; }
+    #photoMsg:empty { display: none; }
+    #photoMsg { margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--ink-2); min-height: 18px; }
+    #photoMsg.err { color: #F87171; }
+    #photoList { margin-top: 14px; }
+    #photoList .ph-h { font-size: 12.5px; font-weight: 800; color: var(--ink-2); margin: 10px 0 4px; }
+    #photoList .ph-row { font-size: 13.5px; color: var(--ink); line-height: 1.9; }
+    #photoList .ph-row a { color: #93C5FD; margin-left: 8px; }
+    #photoList .ph-none { font-size: 13px; color: var(--ink-3); }
+    .b-move { background: linear-gradient(135deg, #67E8F9, #22D3EE); }
+    .b-edit { background: linear-gradient(135deg, #C4B5FD, #A78BFA); }
+    .b-del { background: linear-gradient(135deg, #FDA4A4, #F87171); }
+    .b-ghost { background: rgba(255,255,255,.07); color: var(--ink-2) !important; box-shadow: none; }
+    .photo-preview { width: 100%; border-radius: 14px; margin-top: 12px; display: none; box-shadow: var(--shadow-1); }
+
+    .sumcard { border: 1px solid var(--line); border-radius: 15px; padding: 13px 15px; margin-top: 11px;
+      background: var(--surface-2); box-shadow: var(--shadow-1); }
+    .sumcard .d { font-weight: 800; color: var(--ink); font-size: 15px; margin-bottom: 5px;
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .sumcard .l { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+    .sumcard .l b { color: var(--ink); font-weight: 700; }
+    .sumcard .ops { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+    .sumcard .actions { margin-top: 11px; }
+    .sumcard .actions button { padding: 10px 12px; font-size: 13.5px; flex: 0 0 auto; }
+    .sumempty { color: var(--ink-3); font-size: 14px; padding: 26px 0; text-align: center; }
+
+    #movebar { position: absolute; left: 12px; right: 12px; bottom: 20px; z-index: 40; display: none;
+      flex-direction: column; gap: 11px; background: rgba(8, 10, 14, .94); backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px); border: 1px solid var(--line-2); color: #EEF2F7;
+      border-radius: 18px; padding: 15px 16px; box-shadow: var(--shadow-2); }
+    #movebar .mi { font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+    #movebar .mi b { color: #8FBEFF; }
+    #movebar .mb { display: flex; gap: 9px; }
+    #movebar button { flex: 1; padding: 13px; border: none; border-radius: 12px; font-size: 15px; font-weight: 800; cursor: pointer; }
+    #mvOk { background: linear-gradient(135deg, #6EE7A0, #34D399); color: #08130C; }
+    #mvCancel { background: rgba(255,255,255,.08); color: #CBD5E1; }
+
+    #toast { position: absolute; left: 50%; bottom: 122px; transform: translateX(-50%) translateY(16px);
+      z-index: 50; background: #EEF2F7; color: #0A0C10; padding: 11px 18px; border-radius: 999px;
+      font-size: 13px; font-weight: 700; opacity: 0; transition: all .22s; pointer-events: none;
+      white-space: nowrap; box-shadow: 0 12px 34px rgba(0, 0, 0, .7); }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    /* v2.3 物件写真のサムネイル列と拡大表示 */
+    .prop-h { font-size: 12px; font-weight: 800; color: var(--ink-3); margin: 10px 0 5px; letter-spacing: .04em; }
+    .prop-strip { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+    .prop-strip .ph-none { font-size: 12.5px; color: var(--ink-3); align-self: center; }
+    .prop-th { flex: 0 0 auto; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line-2);
+      background: #1A2029; padding: 0; cursor: pointer; }
+    .prop-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .prop-add { position: relative; flex: 0 0 auto; width: 64px; height: 64px; border-radius: 10px; border: 1px dashed var(--line-2);
+      color: var(--ink-3); font-size: 11px; font-weight: 700; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; line-height: 1.3; cursor: pointer; text-align: center; }
+    .prop-add b { font-size: 20px; line-height: 1; }
+    .prop-add input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; font-size: 16px; }
+    .prop-add.busy { opacity: .5; pointer-events: none; }
+    #lightbox { position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .92); display: none;
+      align-items: center; justify-content: center; }
+    #lightbox.show { display: flex; }
+    #lbImg { max-width: 100%; max-height: 82vh; max-height: 82dvh; object-fit: contain; }
+    #lbClose { position: absolute; top: 12px; right: 12px; width: 42px; height: 42px; border: 0; border-radius: 99px;
+      background: rgba(255,255,255,.14); color: #fff; font-size: 24px; cursor: pointer; }
+    .lbNav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: 0; border-radius: 12px;
+      background: rgba(255,255,255,.12); color: #fff; font-size: 30px; cursor: pointer; }
+    #lbPrev { left: 6px; } #lbNext { right: 6px; }
+    #lbBar { position: absolute; left: 0; right: 0; bottom: 16px; display: flex; justify-content: center; align-items: center; gap: 14px;
+      color: #CBD5E1; font-size: 13px; font-weight: 700; }
+    #lbRemove { font-size: 12px; font-weight: 700; color: #FCA5A5; background: transparent; border: 1px solid rgba(252,165,165,.4);
+      border-radius: 9px; padding: 7px 11px; cursor: pointer; font-family: inherit; }
+    /* v2.3 除雪リスト */
+    .list-meta { font-size: 12.5px; color: var(--ink-3); margin-bottom: 8px; }
+    .list-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 4px; border: 0;
+      border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; font-family: inherit; }
+    .list-row .dot { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%; }
+    .list-row .tx { flex: 1 1 auto; min-width: 0; }
+    .list-row .nm { font-size: 14px; font-weight: 700; display: block; }
+    .list-row .sp { font-size: 12px; color: var(--ink-3); display: block; margin-top: 2px; }
+    .list-row .ar { flex: 0 0 auto; font-size: 11.5px; color: var(--ink-3); }
+    .list-row.pre { opacity: .55; }
+
+    #loading { position: absolute; inset: 0; z-index: 60; background: rgba(8, 10, 14, .55);
+      backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; }
+    #loading.show { display: flex; }
+    #loading .sp { width: 38px; height: 38px; border: 3.5px solid rgba(255,255,255,.12); border-top-color: var(--brand);
+      border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 420px) {
+      .brand .names i { display: none; }
+      #pinCount { display: none; }
+    }
+    /* v2.1 スマホ: 上の2段を薄くして地図を広く見せる（ロゴ文字・ラベルを省き、1行ずつに収める） */
+    @media (max-width: 600px) {
+      #top { padding: 6px; gap: 5px; }
+      #topbar { flex-wrap: nowrap; gap: 6px; padding: 5px 6px; border-radius: 14px; }
+      .brand { margin-right: 0; }
+      .brand .logo svg { width: 26px; height: 26px; }
+      .brand .names { display: none; }
+      .field { flex: 1 1 0; min-width: 0; }
+      .field label { display: none; }
+      .field select { width: 100%; font-size: 13px; padding: 7px 24px 7px 9px; border-radius: 9px; background-position: right 7px center; }
+      #selOperator, #selArea { min-width: 0; }
+      .fold { display: block; }
+      #sessionbar { gap: 6px; padding: 5px 6px; border-radius: 14px; }
+      #btnSession { font-size: 12.5px; padding: 7px 10px; border-radius: 9px; white-space: nowrap; flex: 0 0 auto; }
+      .sess-info { font-size: 11.5px; gap: 5px; white-space: nowrap; min-width: 0; overflow: hidden; }
+      #sessDot { flex: 0 0 auto; }
+      .sess-tools { gap: 4px; flex: 0 0 auto; }
+      .chip { font-size: 11px; padding: 6px 7px; border-radius: 8px; white-space: nowrap; }
+    }
+    /* v3: ログイン画面 */
+    #login { position: fixed; inset: 0; z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+      background: #0A0C10; color: #E6EAF0; padding: 24px; text-align: center; }
+    #login.show { display: flex; }
+    #login h1 { margin: 0; font-size: 28px; letter-spacing: .04em; }
+    #login p { margin: 0; font-size: 14px; line-height: 1.7; color: #9AA4B2; }
+    #login .err { color: #F87171; min-height: 1.7em; }
+    #login .sp { width: 30px; height: 30px; border: 3px solid rgba(255,255,255,.12); border-top-color: #3B82F6; border-radius: 50%; animation: zlspin .8s linear infinite; display: none; }
+    #login.busy .sp { display: block; }
+    #login.busy #gbtn { display: none; }
+    @keyframes zlspin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div id="top">
+    <header id="topbar">
+      <div class="brand">
+        <span class="logo">
+          <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+            <defs>
+              <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#7FB2FF"></stop>
+                <stop offset="1" stop-color="#A78BFA"></stop>
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="32" height="32" rx="9" fill="url(#lg)"></rect>
+            <path d="M8 22 L13.5 10 L18.5 20 L24 8" fill="none" stroke="#0A0C10" stroke-width="2.7"
+              stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </span>
+        <span class="names"><b id="appName">Zipline</b><i id="appSub"></i></span>
+      </div>
+      <div class="field">
+        <label id="lbOperator">担当</label>
+        <select id="selOperator"></select>
+      </div>
+      <div class="field">
+        <label id="lbArea">エリア</label>
+        <select id="selArea"></select>
+      </div>
+      <span id="pinCount" class="count"></span>
+    </header>
+
+    <div id="sessionbar">
+      <button id="btnSession">開始</button>
+      <div class="sess-info"><span id="sessDot"></span><span id="sessionInfo">待機中</span></div>
+      <div class="sess-tools">
+        <button id="btnList" class="chip">リスト</button>
+        <button id="btnMembers" class="chip">メンバー</button>
+        <button id="btnOrdered" class="chip">受注済みだけ</button>
+        <button id="btnSummary" class="chip">集計</button>
+      </div>
+      <button id="btnFold" class="fold" aria-label="上のボタンをたたむ">▲</button>
+    </div>
+
+    <div id="banner"></div>
+  </div>
+
+  <div id="legend"></div>
+
+  <div id="fabs">
+    <button id="btnAdd" class="dock-btn">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
+      <span class="lb">追加</span>
+    </button>
+    <button id="btnDone" class="dock-btn">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"></path></svg>
+      <span class="lb">表示</span>
+    </button>
+    <button id="btnGeo" class="dock-btn">
+      <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>
+      <span class="lb">現在地OFF</span>
+    </button>
+    <button id="btnMapStyle" class="dock-btn" aria-label="地図の色を切り替える">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z"></path><path d="M9 4v13.5M15 6.5V20"></path></svg>
+      <span class="lb">カラー</span>
+    </button>
+    <button id="btnRefresh" class="dock-btn">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4.2h-4.2"></path></svg>
+      <span class="lb">更新</span>
+    </button>
+  </div>
+
+  <div id="sheet">
+    <button type="button" id="sheetClose" aria-label="閉じる">×</button>
+    <div class="grabArea" id="sheetGrab"><div class="grab"></div></div>
+    <div class="inner" id="sheetInner"></div>
+  </div>
+
+  <div id="lightbox">
+    <img id="lbImg" alt="物件写真">
+    <button type="button" id="lbPrev" class="lbNav" aria-label="前の写真">‹</button>
+    <button type="button" id="lbNext" class="lbNav" aria-label="次の写真">›</button>
+    <button type="button" id="lbClose" aria-label="閉じる">×</button>
+    <div id="lbBar"><span id="lbCount"></span><button type="button" id="lbRemove">この写真を外す</button></div>
+  </div>
+
+  <div id="movebar">
+    <div class="mi" id="moveInfo"></div>
+    <div class="mi">ピンを<b>ドラッグ</b>するか、正しい場所を<b>タップ</b>してください。</div>
+    <div class="mb">
+      <button id="mvOk">この位置に決定</button>
+      <button id="mvCancel">キャンセル</button>
+    </div>
+  </div>
+
+  <div id="login">
+    <h1>Zipline</h1>
+    <p>Google アカウントでログインしてください。<br>一度ログインすると30日間そのまま使えます。</p>
+    <div id="gbtn"></div>
+    <div class="sp"></div>
+    <p class="err" id="loginErr"></p>
+  </div>
+
+  <div id="toast"></div>
+  <div id="loading"><div class="sp"></div></div>
+
+  <script>
+    // v3: サーバー（GAS）の URL は config.js の ZL_API_URL。
+    // ログインの合札と、前回の設定（担当者・エリア・地図キーなど）はこのスマホに覚えておき、
+    // 開いた瞬間はそれで画面を動かす（サーバーの返事を待たない）。
+    var ZL_TOKEN_KEY = 'zipline_token_v3', ZL_BOOT_KEY = 'zipline_boot_v3';
+    var ZL_TOKEN = '', ZL_BOOT = null;
+    try { ZL_TOKEN = localStorage.getItem(ZL_TOKEN_KEY) || ''; ZL_BOOT = JSON.parse(localStorage.getItem(ZL_BOOT_KEY) || 'null'); } catch (e) { ZL_BOOT = null; }
+    var ZL_READY = !!(ZL_TOKEN && ZL_BOOT && ZL_BOOT.config && ZL_BOOT.maps_key);
+    var CONFIG_DATA = ZL_READY ? ZL_BOOT.config : null;
+    var INITIAL_SNAP = null;
+
+    // サーバーを呼ぶ（JSON を text/plain で送ると、ブラウザの事前確認が要らず1往復で済む）
+    function zlCall(fn, args, token) {
+      return fetch(window.ZL_API_URL, {
+        method: 'POST', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ fn: fn, args: args || [], token: token || '' })
+      }).then(function (r) {
+        if (!r.ok) throw new Error('サーバーにつながりません（' + r.status + '）');
+        return r.json();
+      }).then(function (res) {
+        if (!res || !res.ok) {
+          var err = new Error((res && res.error) || 'サーバーでエラーが起きました');
+          err.auth = !!(res && res.auth);
+          throw err;
+        }
+        return res.result;
+      });
+    }
+    function zlLogout(msg) {
+      try { localStorage.removeItem(ZL_TOKEN_KEY); localStorage.removeItem(ZL_BOOT_KEY); } catch (e) { /* 何もしない */ }
+      // 同じページの # だけ変えても読み直されないので、必ず読み直す
+      history.replaceState(null, '', location.pathname + (msg ? '#msg=' + encodeURIComponent(msg) : ''));
+      location.reload();
+    }
+    if (!ZL_READY) window.addEventListener('error', function (e) { if (String(e.message).indexOf('zl-wait-login') >= 0) e.preventDefault(); });
+  </script>
+  <script>
+    if (!ZL_READY) throw new Error('zl-wait-login'); // ログイン前は本体を動かさない（ログインの部品が下で動く）
+    var MAP_STYLES = [
+      { elementType: 'geometry', stylers: [{ color: '#14181F' }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: '#7C8AA0' }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: '#14181F' }] },
+      { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#242B35' }] },
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+      { featureType: 'poi.park', elementType: 'geometry', stylers: [{ visibility: 'on' }, { color: '#16241C' }] },
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+      { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#242A33' }] },
+      { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#1E242C' }] },
+      { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#323A4A' }] },
+      { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#66748A' }] },
+      { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#101B26' }] },
+      { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4C6B85' }] }
+    ];
+
+    // 地図の色（v1.3）。カラー＝Google 標準の色／ホワイト＝白基調／ダーク＝従来。
+    // 店・駅などのアイコンはどの色でも消す（作業ピンを見やすく）。選んだ色は端末に覚える。
+    var MAP_HIDE_POI = [
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] }
+    ];
+    var MAP_STYLES_WHITE = [
+      { elementType: 'geometry', stylers: [{ color: '#F5F6F8' }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: '#5B6472' }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: '#FFFFFF' }] },
+      { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#C9CED6' }] },
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+      { featureType: 'poi.park', elementType: 'geometry', stylers: [{ visibility: 'on' }, { color: '#E3EEE4' }] },
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+      { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#FFFFFF' }] },
+      { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#DADFE6' }] },
+      { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#E6E9EE' }] },
+      { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#7A8392' }] },
+      { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#CFE0EE' }] },
+      { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#6C8BA6' }] }
+    ];
+    var MAP_THEMES = {
+      color: { label: 'カラー', styles: MAP_HIDE_POI, bg: '#E5E3DF' },
+      white: { label: 'ホワイト', styles: MAP_STYLES_WHITE, bg: '#F5F6F8' },
+      dark:  { label: 'ダーク', styles: MAP_STYLES, bg: '#14181F' }
+    };
+    var MAP_THEME_ORDER = ['color', 'white', 'dark'];
+    var mapTheme = localStorage.getItem('zipline_maptheme');
+    if (!MAP_THEMES[mapTheme]) mapTheme = 'color';
+
+    function applyMapTheme() {
+      var t = MAP_THEMES[mapTheme];
+      if (map) map.setOptions({ styles: t.styles, backgroundColor: t.bg });
+      var b = $('btnMapStyle');
+      if (b) setLabel(b, t.label);
+    }
+
+    function cycleMapTheme() {
+      var i = MAP_THEME_ORDER.indexOf(mapTheme);
+      mapTheme = MAP_THEME_ORDER[(i + 1) % MAP_THEME_ORDER.length];
+      localStorage.setItem('zipline_maptheme', mapTheme);
+      applyMapTheme();
+      toast('地図の色：' + MAP_THEMES[mapTheme].label);
+    }
+
+    var L = CONFIG_DATA.LABELS;
+    var map, markers = {}, pinsData = [], addMode = false, showDone = false, areaFilter = '';
+    var selectedId = null; // v2.6 詳細を開いているピン（黄色の太い縁で目立たせる）
+    var currentSession = null, sessionsData = [];
+    // 担当者はログイン中の Google アカウントで決まる（サーバーが照合済み）。画面では選べない。
+    var ME = CONFIG_DATA.ME || { name: '', email: '' };
+    var currentOperator = ME.name || '';
+    var orderedOnly = localStorage.getItem('zipline_orderedonly') === '1';
+    var PRE_ORDER = CONFIG_DATA.PRE_ORDER_STATUSES || [];
+    var pendingLatLng = null;
+    var moveState = null;
+    var opMarkers = {}, opInfo = null, geoWatchId = null, geoShare = false, geoLastSent = 0, myPos = null;
+
+    function $(id) { return document.getElementById(id); }
+
+    function api(fn) {
+      var args = Array.prototype.slice.call(arguments, 1);
+      return zlCall(fn, args, ZL_TOKEN).catch(function (e) {
+        // 合札が切れた・使える人から外れた → ログイン画面へ
+        if (e.auth) zlLogout(e.message);
+        throw e;
+      });
+    }
+
+    function toast(msg) {
+      var t = $('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(t._timer);
+      t._timer = setTimeout(function () { t.classList.remove('show'); }, 2200);
+    }
+
+    function loading(on) { $('loading').classList.toggle('show', !!on); }
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function setLabel(btn, txt) { var l = btn.querySelector('.lb'); if (l) l.textContent = txt; }
+
+    function initMap() {
+      $('appName').textContent = CONFIG_DATA.APP_NAME;
+      $('appSub').textContent = CONFIG_DATA.APP_SUBTITLE || '';
+      $('appSub').style.display = CONFIG_DATA.APP_SUBTITLE ? '' : 'none';
+      $('lbOperator').textContent = L.operator;
+      $('lbArea').textContent = L.area;
+      $('banner').textContent = '地図をタップして' + L.pin + 'を追加します';
+      setLabel($('btnDone'), L.done);
+
+      map = new google.maps.Map($('map'), {
+        center: { lat: CONFIG_DATA.MAP_CENTER_LAT, lng: CONFIG_DATA.MAP_CENTER_LNG },
+        zoom: CONFIG_DATA.MAP_ZOOM,
+        styles: MAP_THEMES[mapTheme].styles,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        clickableIcons: false,
+        gestureHandling: 'greedy',
+        backgroundColor: MAP_THEMES[mapTheme].bg
+      });
+      applyMapTheme();
+      map.addListener('click', onMapClick);
+      buildSelectors();
+      buildLegend();
+      updateAddBtn();
+      if (currentOperator && localStorage.getItem('zipline_geoshare') !== '0') startGeo(true);
+      updateGeoBtn();
+      mapReady = true;
+      // データは地図を待たずに取りに行っている。届いていればすぐ描く。
+      if (pendingSnap) { applySnapshot(pendingSnap); pendingSnap = null; }
+      else { var lp = loadLocalPins(); if (lp) { pinsData = lp; renderPins(); loading(false); } }
+      if (!pendingSnap && !snapBusy && !snapHash) refreshAll({ initial: true });
+      // 定期更新は1回の呼び出しにまとめ、中身が変わったときだけ描き直す。
+      setInterval(function () { if (!document.hidden) refreshAll({}); }, POLL_MS);
+      setInterval(updateSessionUI, 1000);
+    }
+
+    function buildSelectors() {
+      var so = $('selOperator');
+      so.innerHTML = '';
+      // 自分固定（ログイン中のアカウント）。ほかの人には切り替えられない。
+      so.appendChild(new Option(ME.name || ME.email, ME.name));
+      so.value = ME.name;
+      so.disabled = true;
+
+      var sa = $('selArea');
+      sa.innerHTML = '';
+      sa.appendChild(new Option('全' + L.area, ''));
+      CONFIG_DATA.AREAS.forEach(function (a) { sa.appendChild(new Option(a, a)); });
+      sa.addEventListener('change', function () { areaFilter = sa.value; renderPins(); });
+
+      var dl = document.createElement('datalist');
+      dl.id = 'areaList';
+      CONFIG_DATA.AREAS.forEach(function (a) { dl.appendChild(new Option(a)); });
+      document.body.appendChild(dl);
+    }
+
+    function operatorNames() { return CONFIG_DATA.OPERATORS.map(function (o) { return o.name; }); }
+
+    function operatorColor(name) {
+      var hit = CONFIG_DATA.OPERATORS.filter(function (o) { return o.name === name; })[0];
+      return hit ? hit.color : '#94A3B8';
+    }
+
+    function statusLabel(code) {
+      return code === 'done' ? L.done : (code === 'doing' ? L.doing : L.todo);
+    }
+
+    function statusClass(code) {
+      return code === 'done' ? 'done' : (code === 'doing' ? 'doing' : 'todo');
+    }
+
+    function buildLegend() {
+      var html = '';
+      [['未アップロード', 0], ['1回目済み', 1], ['2回目済み', 2]].forEach(function (x) {
+        var st = pinStyle(x[1]);
+        html += '<div class="row"><span class="dot" style="background:' + st.fill + ';border:2px solid ' + st.stroke + ';box-sizing:border-box;width:12px;height:12px"></span>' + x[0] + '</div>';
+      });
+      html += '<div class="row note">本日（0:00〜）の写真の回数</div>';
+      html += '<div class="row note">▲＝現在地</div>';
+      $('legend').innerHTML = html;
+    }
+
+    // ---- まとめて更新（ピン・作業記録・位置を1回で）----
+    var POLL_MS = 10000;
+    var mapReady = false, pendingSnap = null, snapBusy = false, snapHash = '', snapCount = 0, snapTries = 0;
+
+    // 前回のピンをこの端末に覚えておき、開いた瞬間はそれを描く（サーバーの返事を待たない）。
+    var LOCAL_PINS_KEY = 'zipline_pins_v1';
+    function saveLocalPins(pins) {
+      try { localStorage.setItem(LOCAL_PINS_KEY, JSON.stringify({ day: new Date().toDateString(), pins: pins || [] })); } catch (e) { /* 入らなくても動く */ }
+    }
+    function loadLocalPins() {
+      try {
+        var o = JSON.parse(localStorage.getItem(LOCAL_PINS_KEY) || 'null');
+        // 日付が変わったら色（今日の写真の回数）が違うので使わない。
+        return (o && o.day === new Date().toDateString() && o.pins && o.pins.length) ? o.pins : null;
+      } catch (e) { return null; }
+    }
+
+    function applySnapshot(s) {
+      pinsData = s.pins || [];
+      if (!moveState) renderPins(); else snapHash = '';
+      var st = s.session || {};
+      currentSession = st.current || null;
+      sessionsData = st.sessions || [];
+      updateSessionUI();
+      renderLocations(s.locations || []);
+    }
+
+    // opts.initial: 最初の読み込み（くるくるを出す・失敗したら自動でやり直す） / opts.force: 必ず描き直す
+    function refreshAll(opts) {
+      opts = opts || {};
+      if (snapBusy) return;
+      snapBusy = true;
+      snapCount++;
+      if (opts.initial && !loadLocalPins()) loading(true);
+      // 1分に1回は中身が同じでも描き直す（古くなった現在地の印を消すため）
+      var sendHash = (opts.initial || opts.force || snapCount % 6 === 0) ? '' : snapHash;
+      api('getSnapshot', sendHash, !!opts.force).then(function (s) {
+        snapTries = 0;
+        if (!s || s.same) return;
+        snapHash = s.hash || '';
+        saveLocalPins(s.pins);
+        if (!mapReady) { pendingSnap = s; return; }
+        applySnapshot(s);
+      }).catch(function (e) {
+        if (opts.initial && snapTries < 3) {
+          snapTries++;
+          setTimeout(function () { refreshAll({ initial: true }); }, 1500 * snapTries);
+        } else if (opts.initial || opts.force) {
+          toast('読み込みエラー: ' + e.message);
+        }
+      }).then(function () {
+        snapBusy = false;
+        if (opts.initial) loading(false);
+      });
+    }
+
+    function refreshPins(initial) {
+      if (initial) loading(true);
+      api('getPins').then(function (pins) {
+        pinsData = pins || [];
+        if (moveState) return;
+        renderPins();
+      }).catch(function (e) {
+        toast('読み込みエラー: ' + e.message);
+      }).then(function () { loading(false); });
+    }
+
+    function refreshSession(showErr) {
+      api('getSessionState').then(function (st) {
+        currentSession = st.current || null;
+        sessionsData = st.sessions || [];
+        updateSessionUI();
+      }).catch(function (e) {
+        if (showErr) toast('エラー: ' + e.message);
+      });
+    }
+
+    function refreshLocations() {
+      api('getLocations').then(function (locs) {
+        renderLocations(locs || []);
+      }).catch(function () {});
+    }
+
+    function renderLocations(locs) {
+      Object.keys(opMarkers).forEach(function (k) { opMarkers[k].setMap(null); });
+      opMarkers = {};
+      var now = Date.now();
+      locs.forEach(function (l) {
+        if (!l.updatedAtMs || now - l.updatedAtMs > 20 * 60 * 1000) return;
+        var fresh = (now - l.updatedAtMs) < 3 * 60 * 1000;
+        var m = new google.maps.Marker({
+          position: { lat: l.lat, lng: l.lng },
+          map: map,
+          zIndex: 500,
+          title: l.operator + ' 現在地',
+          label: { text: l.operator, color: '#EEF2F7', fontSize: '11px', fontWeight: '700' },
+          icon: {
+            path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+            scale: 8,
+            fillColor: operatorColor(l.operator),
+            fillOpacity: fresh ? 1 : 0.4,
+            strokeColor: '#0A0C10',
+            strokeWeight: 2.5
+          }
+        });
+        var mins = Math.max(0, Math.floor((now - l.updatedAtMs) / 60000));
+        var when = mins < 1 ? 'たった今' : (mins + '分前');
+        m.addListener('click', function () {
+          if (!opInfo) opInfo = new google.maps.InfoWindow();
+          opInfo.setContent('<div style="font-family:Noto Sans JP,sans-serif;font-size:13px;line-height:1.6;color:#0A0C10"><b>'
+            + esc(l.operator) + '</b> の現在地<br>更新: ' + when + '<br>精度: 約' + l.accuracy + 'm</div>');
+          opInfo.open(map, m);
+        });
+        opMarkers[l.operator] = m;
+      });
+    }
+
+    function updateGeoBtn() {
+      var b = $('btnGeo');
+      b.classList.toggle('on', geoShare);
+      setLabel(b, geoShare ? '現在地ON' : '現在地OFF');
+    }
+
+    function toggleGeo() {
+      if (geoShare) { stopGeo(false, true); return; }
+      startGeo(false);
+    }
+
+    function startGeo(silent) {
+      if (!currentOperator) { if (!silent) toast('上部で' + L.operator + 'を選んでください'); return; }
+      if (!navigator.geolocation) { if (!silent) toast('この端末は位置情報に対応していません'); return; }
+      geoShare = true;
+      geoLastSent = 0;
+      localStorage.setItem('zipline_geoshare', '1');
+      updateGeoBtn();
+      geoWatchId = navigator.geolocation.watchPosition(onGeoPos, onGeoErr, {
+        enableHighAccuracy: true, maximumAge: 10000, timeout: 20000
+      });
+      if (!silent) toast('現在地の共有を開始しました');
+    }
+
+    function stopGeo(silent, manual) {
+      if (geoWatchId !== null) { navigator.geolocation.clearWatch(geoWatchId); geoWatchId = null; }
+      geoShare = false;
+      if (manual) localStorage.setItem('zipline_geoshare', '0');
+      updateGeoBtn();
+      if (!silent) toast('現在地の共有を停止しました');
+    }
+
+    function onGeoPos(pos) {
+      myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      var now = Date.now();
+      if (now - geoLastSent < 20000) return;
+      geoLastSent = now;
+      api('updateLocation', currentOperator, pos.coords.latitude, pos.coords.longitude, Math.round(pos.coords.accuracy || 0))
+        .then(function (locs) { renderLocations(locs || []); })
+        .catch(function () {});
+    }
+
+    function onGeoErr(err) {
+      if (err && err.code === 1) {
+        stopGeo(true);
+        toast('位置情報の利用が許可されていません');
+      } else {
+        toast('現在地を取得できません');
+      }
+    }
+
+    function haversine(lat1, lng1, lat2, lng2) {
+      var R = 6371000, toRad = Math.PI / 180;
+      var dLat = (lat2 - lat1) * toRad, dLng = (lng2 - lng1) * toRad;
+      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+        + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+    }
+
+    function fmtDist(m) { return m < 1000 ? (Math.round(m) + 'm') : ((m / 1000).toFixed(1) + 'km'); }
+
+    function centerOnOperator(op) {
+      var m = opMarkers[op];
+      if (!m) { toast('現在地を受信していません'); return; }
+      closeSheet();
+      map.panTo(m.getPosition());
+      map.setZoom(16);
+      google.maps.event.trigger(m, 'click');
+    }
+
+    function openMemberList() {
+      loading(true);
+      api('getLocations').then(function (locs) {
+        locs = locs || [];
+        renderLocations(locs);
+        renderMemberSheet(locs);
+      }).catch(function (e) { toast('エラー: ' + e.message); })
+        .then(function () { loading(false); });
+    }
+
+    function renderMemberSheet(locs) {
+      var now = Date.now();
+      var html = '<h2>メンバーの現在地</h2>'
+        + '<div class="meta">' + (geoShare ? '自分の位置を共有中（現在地ON）' : '自分の位置は未共有（現在地OFF）') + '</div>';
+      if (!locs.length) {
+        html += '<div class="sumempty">まだ位置情報がありません</div>';
+        openSheet(html);
+        return;
+      }
+      locs.forEach(function (l) {
+        var age = l.updatedAtMs ? Math.floor((now - l.updatedAtMs) / 60000) : null;
+        var stale = age === null || age > 20;
+        var when = stale ? '20分以上前' : (age < 1 ? 'たった今' : age + '分前');
+        var dist = (myPos && !stale) ? fmtDist(haversine(myPos.lat, myPos.lng, l.lat, l.lng)) : '';
+        var doing = pinsData.filter(function (p) {
+          return p.operator === l.operator && p.status === 'doing';
+        }).length;
+        html += '<div class="sumcard">'
+          + '<div class="d"><span class="dot" style="background:' + operatorColor(l.operator) + '"></span>'
+          + esc(l.operator)
+          + (doing ? ' <span class="badge doing">' + esc(L.doing) + doing + '</span>' : '')
+          + (stale ? ' <span class="badge done">停止中</span>' : '')
+          + '</div>'
+          + '<div class="l">更新: ' + when + (dist ? ' ・ 距離: <b>' + dist + '</b>' : '') + '</div>'
+          + '<div class="actions"><button class="b-move" data-op="' + esc(l.operator) + '">地図で表示</button></div>'
+          + '</div>';
+      });
+      openSheet(html);
+      Array.prototype.forEach.call($('sheetInner').querySelectorAll('button[data-op]'), function (b) {
+        b.onclick = function () { centerOnOperator(b.getAttribute('data-op')); };
+      });
+    }
+
+    // ピンの色＝当日（日本時間 0:00〜）の作業写真アップロード回数。0回=赤／1回=青／2回以上=白（ホワイト地図でも見えるよう濃い縁取り）。
+    // 回数はサーバーが数えて todayUploads で返す。
+    function pinStyle(n) {
+      n = Number(n) || 0;
+      if (n >= 2) return { fill: '#FFFFFF', stroke: '#111827', weight: 3.5 };
+      if (n === 1) return { fill: '#3B82F6', stroke: '#0A0C10', weight: 2.5 };
+      return { fill: '#EF4444', stroke: '#0A0C10', weight: 2.5 };
+    }
+
+    // v2.6 選択中のピンは、中の色（赤・青・白）はそのままで、大きく・黄色の太い縁にする。
+    function pinIcon(p) {
+      var s = pinStyle(p.todayUploads), sel = p.id === selectedId;
+      return {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: sel ? 14 : (p.status === 'doing' ? 12 : 9),
+        fillColor: s.fill,
+        fillOpacity: 1,
+        strokeColor: sel ? '#FACC15' : s.stroke,
+        strokeWeight: sel ? 5 : s.weight
+      };
+    }
+    function setSelected(id) {
+      var prev = selectedId;
+      selectedId = id || null;
+      [prev, selectedId].forEach(function (k) {
+        if (!k || !markers[k]) return;
+        var p = pinsData.filter(function (x) { return x.id === k; })[0];
+        if (!p) return;
+        markers[k].setIcon(pinIcon(p));
+        markers[k].setZIndex(k === selectedId ? 9 : (p.status === 'doing' ? 2 : 1));
+        if (k === selectedId) markers[k].setOpacity(1);
+        else markers[k].setOpacity(isPreOrder(p) ? 0.4 : 1);
+      });
+    }
+
+    function isPreOrder(p) { return PRE_ORDER.indexOf(p.orderStatus) >= 0; }
+
+    function isVisible(p) {
+      if (orderedOnly && isPreOrder(p)) return false;
+      if (p.status === 'done' && !showDone) return false;
+      if (areaFilter && p.area !== areaFilter) return false;
+      return true;
+    }
+
+    function renderPins() {
+      Object.keys(markers).forEach(function (id) { markers[id].setMap(null); });
+      markers = {};
+      pinsData.forEach(function (p) {
+        var m = new google.maps.Marker({
+          position: { lat: p.lat, lng: p.lng },
+          map: isVisible(p) ? map : null,
+          title: p.name + (p.operator ? ' / ' + p.operator : ''),
+          zIndex: p.id === selectedId ? 9 : (p.status === 'doing' ? 2 : 1),
+          // 受注前（見積提出・商談中）は薄く出す。位置が要確認のピンは「!」を付ける。
+          opacity: (isPreOrder(p) && p.id !== selectedId) ? 0.4 : 1,
+          label: p.locCheck === '要確認' ? { text: '!', color: '#0A0C10', fontWeight: '800', fontSize: '12px' } : null,
+          icon: pinIcon(p)
+        });
+        m.addListener('click', function () { openDetail(p.id); });
+        markers[p.id] = m;
+      });
+      var open = pinsData.filter(function (p) { return p.status !== 'done'; }).length;
+      var done = pinsData.length - open;
+      $('pinCount').textContent = '未対応 ' + open + ' ・ ' + L.done + ' ' + done;
+    }
+
+    function elapsedText(startMs) {
+      var s = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+      var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      return pad(h) + ':' + pad(m) + ':' + pad(sec);
+    }
+
+    function fmtMinutes(min) {
+      var h = Math.floor(min / 60), m = min % 60;
+      return h > 0 ? (h + '時間' + m + '分') : (m + '分');
+    }
+
+    function updateSessionUI() {
+      var btn = $('btnSession'), info = $('sessionInfo');
+      var active = !!currentSession;
+      $('sessionbar').classList.toggle('active', active);
+      if (active) {
+        btn.textContent = L.sessionEnd;
+        btn.classList.add('on');
+        info.textContent = L.doing + ' ' + elapsedText(currentSession.startMs);
+      } else {
+        btn.textContent = L.sessionStart;
+        btn.classList.remove('on');
+        info.textContent = '待機中';
+      }
+    }
+
+    function onMapClick(e) {
+      if (moveState) { moveState.marker.setPosition(e.latLng); return; }
+      if (!addMode) { closeSheet(); return; }
+      pendingLatLng = e.latLng;
+      addMode = false;
+      updateAddBtn();
+      openAddForm();
+    }
+
+    function updateAddBtn() {
+      var b = $('btnAdd');
+      b.classList.toggle('on', addMode);
+      setLabel(b, addMode ? '取消' : '追加');
+      $('banner').style.display = addMode ? 'block' : 'none';
+    }
+
+    function closeSheet() { $('sheet').classList.remove('open'); setSelected(null); }
+    $('sheetClose').onclick = closeSheet;
+    $('sheetGrab').onclick = closeSheet;
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });
+
+    function openSheet(html, half) {
+      setSelected(null);
+      $('sheetInner').innerHTML = html;
+      $('sheet').classList.toggle('half', !!half);
+      $('sheet').scrollTop = 0;
+      $('sheet').classList.add('open');
+    }
+
+    function statusBadge(p) {
+      return '<span class="badge ' + statusClass(p.status) + '">' + esc(statusLabel(p.status)) + '</span>';
+    }
+
+    function operatorOptions(selected) {
+      var html = '<option value="">(未設定)</option>';
+      operatorNames().forEach(function (n) {
+        html += '<option value="' + n + '"' + (n === selected ? ' selected' : '') + '>' + esc(n) + '</option>';
+      });
+      return html;
+    }
+
+    function openAddForm() {
+      var area = areaFilter || (CONFIG_DATA.AREAS[0] || '');
+      var html = ''
+        + '<h2>' + esc(L.pin) + 'を追加</h2>'
+        + '<div class="meta">' + pendingLatLng.lat().toFixed(6) + ', ' + pendingLatLng.lng().toFixed(6) + '</div>'
+        + '<div class="field2"><label>名称</label><input id="f_name" type="text" placeholder="' + esc(L.pin) + '名を入力"></div>'
+        + '<div class="field2"><label>' + esc(L.area) + '</label><input id="f_area" type="text" list="areaList" value="' + area + '"></div>'
+        + '<div class="field2"><label>' + esc(L.operator) + '</label><select id="f_operator">' + operatorOptions(currentOperator) + '</select></div>'
+        + '<div class="field2"><label>要注意事項</label><textarea id="f_note" placeholder="任意（例: 屋根から落雪あり）"></textarea></div>'
+        + '<div class="actions">'
+        + '<button class="b-done" id="a_save">この場所を登録</button>'
+        + '<button class="b-ghost" id="a_cancel">キャンセル</button>'
+        + '</div>';
+      openSheet(html);
+      $('a_cancel').onclick = closeSheet;
+      $('a_save').onclick = function () {
+        var name = $('f_name').value.trim();
+        if (!name) { toast('名称を入力してください'); return; }
+        loading(true);
+        api('addPin', {
+          name: name,
+          lat: pendingLatLng.lat(),
+          lng: pendingLatLng.lng(),
+          area: $('f_area').value.trim(),
+          operator: $('f_operator').value,
+          note: $('f_note').value.trim()
+        }).then(function (pins) {
+          pinsData = pins || [];
+          renderPins();
+          closeSheet();
+          toast('登録しました');
+        }).catch(function (e) { toast('エラー: ' + e.message); })
+          .then(function () { loading(false); });
+      };
+    }
+
+    function openDetail(id) {
+      var p = pinsData.filter(function (x) { return x.id === id; })[0];
+      if (!p) return;
+      var rows = '';
+      rows += '<div class="detail-row">本日の写真: <b id="todayCount">' + (Number(p.todayUploads) || 0) + '</b> 回</div>';
+      if (p.orderStatus) rows += '<div class="detail-row">受注ステータス: <b>' + esc(p.orderStatus) + '</b>' + (isPreOrder(p) ? '（受注前）' : '') + '</div>';
+      if (p.address) rows += '<div class="detail-row">所在地: ' + esc(p.address) + '</div>';
+      if (p.locCheck === '要確認') rows += '<div class="detail-row" style="color:#FACC15">位置が見つかっていません。「位置を修正」で正しい場所に動かしてください。</div>';
+      else if (p.locCheck === '自動') rows += '<div class="detail-row" style="color:#94A3B8">位置は住所から自動で置いたものです（地番のためずれることがあります）。</div>';
+      if (p.area) rows += '<div class="detail-row">' + esc(L.area) + ': <b>' + esc(p.area) + '</b></div>';
+      if (p.completedAt) rows += '<div class="detail-row">' + esc(L.done) + '時刻: <b>' + esc(p.completedAt) + '</b></div>';
+      if (p.updatedAt) rows += '<div class="detail-row">更新: ' + esc(p.updatedAt) + '</div>';
+      // 写真は共有フォルダ（ログイン中のアカウントに権限がある人だけ）。サムネイルと元のリンクを出す。
+      var pm = String(p.photoUrl || '').match(/[-\w]{25,}/);
+      var photo = p.photoUrl
+        ? '<a href="' + esc(p.photoUrl) + '" target="_blank" rel="noopener">' + (pm
+          ? '<img class="photo-preview" style="display:block" src="https://drive.google.com/thumbnail?id=' + pm[0] + '&sz=w800">'
+          : '写真を開く') + '</a>'
+        : '';
+
+      // v2: 先頭は「作業写真を添付」。作業開始・完了・戻すのボタンは出さない（サーバー関数は残してある）。
+      var main = '<label class="photoBtn" id="photoBtn">📷 作業写真を添付'
+        + '<input id="photoInput" type="file" accept="image/*" multiple></label>'
+        + '<div id="photoMsg"></div>';
+      var actions = '';
+      actions += '<button class="b-move" id="act_move">位置を修正</button>';
+      actions += '<button class="b-edit" id="act_edit">情報を編集</button>';
+      actions += '<button class="b-del" id="act_del">削除</button>';
+
+      var opField = '';
+      if (p.status !== 'done') {
+        opField = '<div class="field2"><label>' + esc(L.operator) + '</label>'
+          + '<select id="f_op2">' + operatorOptions(p.operator) + '</select></div>';
+      }
+
+      // v2.2: ふだんは「作業写真を添付・除雪場所・要注意事項」だけ。ほかは「詳しく見る」を開いたときに出す。
+      var key = '<div class="detail-row">除雪場所: <b>' + (p.snowSpot ? esc(p.snowSpot) : '—') + '</b></div>'
+        + '<div class="detail-row caution">要注意事項: ' + (p.note ? '<b>' + esc(p.note) + '</b>' : '<span class="none">なし</span>') + '</div>';
+      var html = ''
+        + '<h2>' + esc(p.name) + '</h2>'
+        + '<div class="actions primary">' + main + '</div>'
+        + key
+        + '<div class="prop-h">物件写真</div><div id="propStrip" class="prop-strip"><span class="ph-none">読み込み中…</span></div>'
+        + '<button type="button" class="moreBtn" id="moreBtn">詳しく見る ▼</button>'
+        + '<div id="moreBox" style="display:none">'
+        + '<div id="photoList"><div class="ph-none">読み込み中…</div></div>'
+        + rows
+        + opField
+        + photo
+        + '<div class="actions">' + actions + '</div>'
+        + '</div>';
+      openSheet(html, true);
+      setSelected(p.id);
+      loadPhotoList(p.id);
+      loadPropPhotos(p.id);
+      $('moreBtn').onclick = function () {
+        var open = $('moreBox').style.display === 'none';
+        $('moreBox').style.display = open ? '' : 'none';
+        this.textContent = open ? '閉じる ▲' : '詳しく見る ▼';
+      };
+
+      if ($('f_op2')) $('f_op2').onchange = function () {
+        var val = this.value;
+        loading(true);
+        api('assignOperator', p.id, val).then(function (pins) {
+          pinsData = pins || []; renderPins(); toast('更新しました');
+        }).catch(function (e) { toast('エラー: ' + e.message); })
+          .then(function () { loading(false); });
+      };
+      if ($('act_move')) $('act_move').onclick = function () { enterMoveMode(p.id); };
+      if ($('act_edit')) $('act_edit').onclick = function () { openEditForm(p.id); };
+      if ($('act_del')) $('act_del').onclick = function () {
+        if (!confirm('「' + p.name + '」を削除します。よろしいですか？')) return;
+        loading(true);
+        api('deletePin', p.id).then(function (pins) {
+          pinsData = pins || []; renderPins(); closeSheet(); toast('削除しました');
+        }).catch(function (e) { toast('エラー: ' + e.message); })
+          .then(function () { loading(false); });
+      };
+      $('photoInput').onchange = function () {
+        var input = this;
+        var files = Array.prototype.slice.call(input.files || []);
+        if (!files.length) return;
+        uploadPhotos(p.id, files, input);
+      };
+    }
+
+    // 作業写真の送信: 画面で長辺1600px・JPEG 0.8に縮めてから1回の呼び出しで送る（複数枚でも1回）。
+    function uploadPhotos(pinId, files, input) {
+      var btn = $('photoBtn'), msg = $('photoMsg');
+      function say(t, isErr) { if ($('photoMsg') === msg) { msg.textContent = t; msg.className = isErr ? 'err' : ''; } }
+      btn.classList.add('busy');
+      say('アップロード中…（' + files.length + '枚）', false);
+      var chain = Promise.resolve([]);
+      files.forEach(function (f) {
+        chain = chain.then(function (acc) {
+          return compressImage(f, 1600, 0.8).then(function (u) { acc.push(u); return acc; });
+        });
+      });
+      chain.then(function (urls) {
+        return api('uploadPinPhotos', pinId, urls);
+      }).then(function (r) {
+        // 7秒の更新を待たず、すぐ色を変える
+        pinsData.forEach(function (x) {
+          if (x.id === r.pinId) { x.todayUploads = r.todayUploads; x.lastPhotoAt = r.lastPhotoAt; }
+        });
+        if (!moveState) renderPins();
+        say('アップロードしました（本日' + r.todayUploads + '回目）', false);
+        if ($('todayCount') && $('photoMsg') === msg) $('todayCount').textContent = r.todayUploads;
+        toast('アップロードしました（本日' + r.todayUploads + '回目）');
+        if ($('photoMsg') === msg) loadPhotoList(pinId);
+      }).catch(function (e) {
+        say('アップロードできませんでした: ' + (e && e.message ? e.message : e), true);
+      }).then(function () {
+        btn.classList.remove('busy');
+        input.value = '';
+      });
+    }
+
+    // v2.3 物件写真: 詳細にサムネイルを横に並べ、タップで拡大。最後の「＋」で登録（複数枚可）。
+    var propState = { pinId: null, list: [], idx: 0 };
+    function propThumb(u, size) {
+      return u.fileId ? 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(u.fileId) + '&sz=' + size : u.url;
+    }
+    function loadPropPhotos(pinId) {
+      var box = $('propStrip');
+      api('getPropertyPhotos', pinId).then(function (list) {
+        if ($('propStrip') === box) renderPropPhotos(pinId, list || []);
+      }).catch(function (e) {
+        if ($('propStrip') === box) box.innerHTML = '<span class="ph-none">読み込めません: ' + esc(e && e.message ? e.message : e) + '</span>';
+      });
+    }
+    function renderPropPhotos(pinId, list) {
+      var box = $('propStrip');
+      if (!box) return;
+      propState.pinId = pinId; propState.list = list;
+      var html = list.map(function (u, i) {
+        return '<button type="button" class="prop-th" data-i="' + i + '"><img loading="lazy" src="' + esc(propThumb(u, 'w200')) + '" alt="物件写真' + (i + 1) + '"></button>';
+      }).join('');
+      html += '<label class="prop-add" id="propAdd"><b>＋</b>' + (list.length ? '追加' : '物件写真<br>を登録')
+        + '<input id="propInput" type="file" accept="image/*" multiple></label>';
+      box.innerHTML = html;
+      Array.prototype.forEach.call(box.querySelectorAll('.prop-th'), function (b) {
+        b.onclick = function () { openLightbox(Number(b.getAttribute('data-i'))); };
+      });
+      $('propInput').onchange = function () {
+        var input = this, files = Array.prototype.slice.call(input.files || []);
+        if (!files.length) return;
+        var add = $('propAdd');
+        add.classList.add('busy');
+        toast('物件写真を登録中…（' + files.length + '枚）');
+        var chain = Promise.resolve([]);
+        files.forEach(function (fl) {
+          chain = chain.then(function (acc) { return compressImage(fl, 1600, 0.8).then(function (u) { acc.push(u); return acc; }); });
+        });
+        chain.then(function (urls) { return api('uploadPropertyPhotos', pinId, urls); })
+          .then(function (list2) { renderPropPhotos(pinId, list2 || []); toast('物件写真を登録しました'); })
+          .catch(function (e) { toast('登録できませんでした: ' + (e && e.message ? e.message : e)); if ($('propAdd')) $('propAdd').classList.remove('busy'); });
+      };
+    }
+    function openLightbox(i) {
+      var n = propState.list.length;
+      if (!n) return;
+      propState.idx = (i + n) % n;
+      var u = propState.list[propState.idx];
+      $('lbImg').src = propThumb(u, 'w1600');
+      $('lbCount').textContent = (propState.idx + 1) + ' / ' + n;
+      $('lbPrev').style.display = $('lbNext').style.display = n > 1 ? '' : 'none';
+      $('lightbox').classList.add('show');
+    }
+    function closeLightbox() { $('lightbox').classList.remove('show'); $('lbImg').src = ''; }
+    $('lbClose').onclick = closeLightbox;
+    $('lbPrev').onclick = function () { openLightbox(propState.idx - 1); };
+    $('lbNext').onclick = function () { openLightbox(propState.idx + 1); };
+    $('lightbox').onclick = function (e) { if (e.target === this) closeLightbox(); };
+    (function () {
+      var x0 = null;
+      $('lightbox').addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+      $('lightbox').addEventListener('touchend', function (e) {
+        if (x0 === null) return;
+        var dx = e.changedTouches[0].clientX - x0; x0 = null;
+        if (Math.abs(dx) > 50 && propState.list.length > 1) openLightbox(propState.idx + (dx < 0 ? 1 : -1));
+      }, { passive: true });
+    })();
+    $('lbRemove').onclick = function () {
+      var u = propState.list[propState.idx], pinId = propState.pinId;
+      if (!u || !confirm('この物件写真を一覧から外します（ドライブの写真は残ります）。よろしいですか？')) return;
+      loading(true);
+      api('removePropertyPhoto', pinId, u.url).then(function (list) {
+        closeLightbox(); renderPropPhotos(pinId, list || []); toast('外しました');
+      }).catch(function (e) { toast('エラー: ' + e.message); })
+        .then(function () { loading(false); });
+    };
+
+    // v2.3 除雪リスト: 今の表示条件（エリア・受注済みだけ・完了の表示）で出ているピンを一覧に。
+    // 今日の写真がまだのもの（赤）→1回（青）→2回以上（白）の順、同じ色の中はエリア→名前の順。タップでそのピンへ。
+    function openList() {
+      var rows = pinsData.filter(isVisible).slice().sort(function (a, b) {
+        var ca = Math.min(Number(a.todayUploads) || 0, 2), cb = Math.min(Number(b.todayUploads) || 0, 2);
+        if (ca !== cb) return ca - cb;
+        var aa = String(a.area || ''), ab = String(b.area || '');
+        if (aa !== ab) return aa < ab ? -1 : 1;
+        return String(a.name) < String(b.name) ? -1 : String(a.name) > String(b.name) ? 1 : 0;
+      });
+      var cnt = [0, 0, 0];
+      rows.forEach(function (p) { cnt[Math.min(Number(p.todayUploads) || 0, 2)]++; });
+      var html = '<h2>除雪リスト</h2>'
+        + '<div class="list-meta">' + rows.length + '件（' + (areaFilter ? esc(areaFilter) : '全エリア') + '）・まだ ' + cnt[0] + '・1回済み ' + cnt[1] + '・2回済み ' + cnt[2] + '</div>';
+      if (!rows.length) html += '<div class="ph-none">表示中のピンがありません</div>';
+      html += rows.map(function (p) {
+        var s = pinStyle(p.todayUploads);
+        return '<button type="button" class="list-row' + (isPreOrder(p) ? ' pre' : '') + '" data-id="' + esc(p.id) + '">'
+          + '<span class="dot" style="background:' + s.fill + ';border:2px solid ' + s.stroke + '"></span>'
+          + '<span class="tx"><span class="nm">' + esc(p.name) + '</span>'
+          + (p.snowSpot ? '<span class="sp">' + esc(p.snowSpot) + '</span>' : '') + '</span>'
+          + '<span class="ar">' + esc(p.area || '') + '</span></button>';
+      }).join('');
+      openSheet(html);
+      Array.prototype.forEach.call($('sheetInner').querySelectorAll('.list-row'), function (b) {
+        b.onclick = function () {
+          var id = b.getAttribute('data-id');
+          var p = pinsData.filter(function (x) { return x.id === id; })[0];
+          if (!p) return;
+          map.panTo({ lat: p.lat, lng: p.lng });
+          if (map.getZoom() < 17) map.setZoom(17);
+          openDetail(id);
+        };
+      });
+    }
+
+    // 詳細パネルの「今日の写真」（新しい順）と「過去の写真」（直近10件）
+    function loadPhotoList(pinId) {
+      var box = $('photoList');
+      api('getPinPhotos', pinId).then(function (r) {
+        if ($('photoList') !== box) return;
+        function line(u, full) {
+          var when = full ? u.at : String(u.at).slice(11);
+          var links = (u.urls || []).filter(function (x) { return /^https:\/\//.test(x); }).map(function (x, i) {
+            return '<a href="' + esc(x) + '" target="_blank" rel="noopener">写真' + (i + 1) + '</a>';
+          }).join('');
+          return '<div class="ph-row">' + esc(when) + '　' + esc(u.name) + links + '</div>';
+        }
+        var html = '<div class="ph-h">今日の写真</div>';
+        html += (r.today && r.today.length) ? r.today.map(function (u) { return line(u, false); }).join('') : '<div class="ph-none">まだありません</div>';
+        if (r.past && r.past.length) {
+          html += '<div class="ph-h">過去の写真</div>' + r.past.map(function (u) { return line(u, true); }).join('');
+        }
+        box.innerHTML = html;
+      }).catch(function (e) {
+        if ($('photoList') === box) box.innerHTML = '<div class="ph-none">写真の一覧を読み込めません: ' + esc(e && e.message ? e.message : e) + '</div>';
+      });
+    }
+
+    function enterMoveMode(id) {
+      var p = pinsData.filter(function (x) { return x.id === id; })[0];
+      if (!p) return;
+      closeSheet();
+      if (markers[p.id]) markers[p.id].setMap(null);
+      var mk = new google.maps.Marker({
+        position: { lat: p.lat, lng: p.lng },
+        map: map,
+        draggable: true,
+        zIndex: 999,
+        title: p.name,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 15,
+          fillColor: '#F472B6',
+          fillOpacity: 1,
+          strokeColor: '#0A0C10',
+          strokeWeight: 3
+        }
+      });
+      moveState = { id: p.id, name: p.name, marker: mk };
+      $('moveInfo').innerHTML = '「' + esc(p.name) + '」の位置を修正中';
+      $('movebar').style.display = 'flex';
+      map.panTo(mk.getPosition());
+      map.setZoom(Math.max(map.getZoom(), 16));
+    }
+
+    function exitMoveMode() {
+      if (moveState && moveState.marker) moveState.marker.setMap(null);
+      moveState = null;
+      $('movebar').style.display = 'none';
+      renderPins();
+    }
+
+    function confirmMove() {
+      if (!moveState) return;
+      var pos = moveState.marker.getPosition();
+      var id = moveState.id;
+      loading(true);
+      api('movePin', id, pos.lat(), pos.lng()).then(function (pins) {
+        pinsData = pins || [];
+        exitMoveMode();
+        toast('位置を修正しました');
+      }).catch(function (e) { toast('エラー: ' + e.message); })
+        .then(function () { loading(false); });
+    }
+
+    function openEditForm(id) {
+      var p = pinsData.filter(function (x) { return x.id === id; })[0];
+      if (!p) return;
+      var html = ''
+        + '<h2>情報を編集</h2>'
+        + '<div class="field2"><label>名称</label><input id="e_name" type="text" value="' + esc(p.name) + '"></div>'
+        + '<div class="field2"><label>' + esc(L.area) + '</label><input id="e_area" type="text" list="areaList" value="' + esc(p.area || '') + '"></div>'
+        + '<div class="field2"><label>' + esc(L.operator) + '</label><select id="e_op">' + operatorOptions(p.operator) + '</select></div>'
+        + '<div class="field2"><label>要注意事項</label><textarea id="e_note">' + esc(p.note || '') + '</textarea></div>'
+        + '<div class="actions">'
+        + '<button class="b-done" id="e_save">保存</button>'
+        + '<button class="b-ghost" id="e_cancel">キャンセル</button>'
+        + '</div>';
+      openSheet(html);
+      $('e_cancel').onclick = function () { closeSheet(); };
+      $('e_save').onclick = function () {
+        var name = $('e_name').value.trim();
+        if (!name) { toast('名称を入力してください'); return; }
+        loading(true);
+        api('updatePinInfo', id, {
+          name: name,
+          area: $('e_area').value.trim(),
+          operator: $('e_op').value,
+          note: $('e_note').value.trim()
+        }).then(function (pins) {
+          pinsData = pins || []; renderPins(); closeSheet(); toast('保存しました');
+        }).catch(function (e) { toast('エラー: ' + e.message); })
+          .then(function () { loading(false); });
+      };
+    }
+
+    function openSessionStart() {
+      if (!currentOperator) { toast('上部で' + L.operator + 'を選んでください'); return; }
+      if (!confirm(L.sessionStart + 'します。よろしいですか？')) return;
+      loading(true);
+      api('startSession', currentOperator).then(function (st) {
+        currentSession = st.current; sessionsData = st.sessions || [];
+        updateSessionUI(); toast(L.sessionStart + 'しました');
+      }).catch(function (e) { toast('エラー: ' + e.message); })
+        .then(function () { loading(false); });
+    }
+
+    function openSessionEnd() {
+      if (!currentOperator) { toast('上部で' + L.operator + 'を選んでください'); return; }
+      var html = ''
+        + '<h2>' + esc(L.sessionEnd) + '</h2>'
+        + '<div class="meta">開始: ' + esc(currentSession.startAt) + '（' + elapsedText(currentSession.startMs) + ' 経過）</div>'
+        + '<div class="field2"><label>終了写真（任意）</label><input id="s_photo" type="file" accept="image/*"><img id="s_prev" class="photo-preview"></div>'
+        + '<div class="field2"><label>備考（任意）</label><textarea id="s_note"></textarea></div>'
+        + '<div class="actions">'
+        + '<button class="b-del" id="s_end">' + esc(L.sessionEnd) + 'する</button>'
+        + '<button class="b-ghost" id="s_cancel">キャンセル</button>'
+        + '</div>';
+      openSheet(html);
+      $('s_cancel').onclick = closeSheet;
+      $('s_photo').onchange = function () {
+        var file = this.files[0];
+        if (!file) { $('s_prev').style.display = 'none'; return; }
+        compressImage(file, 900, 0.7).then(function (url) {
+          $('s_prev').src = url; $('s_prev').style.display = 'block';
+        });
+      };
+      $('s_end').onclick = function () {
+        var btn = this;
+        var file = $('s_photo').files[0];
+        var note = $('s_note').value.trim();
+        btn.disabled = true;
+        btn.textContent = '送信中...';
+        var prep = file ? compressImage(file, 1280, 0.72) : Promise.resolve(null);
+        prep.then(function (dataUrl) {
+          loading(true);
+          return api('endSession', currentOperator, dataUrl, note);
+        }).then(function (st) {
+          currentSession = st.current; sessionsData = st.sessions || [];
+          updateSessionUI(); closeSheet(); toast(L.sessionEnd + 'しました');
+        }).catch(function (e) { toast('エラー: ' + e.message); btn.disabled = false; btn.textContent = L.sessionEnd + 'する'; })
+          .then(function () { loading(false); });
+      };
+    }
+
+    function openSummary() {
+      loading(true);
+      api('getDailySummary', 14).then(function (rows) {
+        var html = '<h2>日別の集計</h2><div class="meta">直近14日</div>';
+        if (!rows || !rows.length) {
+          html += '<div class="sumempty">まだ記録がありません</div>';
+        } else {
+          rows.forEach(function (r) {
+            html += '<div class="sumcard">'
+              + '<div class="d">' + esc(r.date) + '</div>'
+              + '<div class="l">稼働時間: <b>' + fmtMinutes(r.minutes) + '</b>（' + r.sessions + '回）</div>'
+              + '<div class="l">' + esc(L.done) + ': <b>' + r.pinCount + '件</b></div>'
+              + (r.byOperatorText ? '<div class="ops">' + esc(r.byOperatorText) + '</div>' : '')
+              + '</div>';
+          });
+        }
+        openSheet(html);
+      }).catch(function (e) { toast('エラー: ' + e.message); })
+        .then(function () { loading(false); });
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function compressImage(file, maxDim, quality) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          var img = new Image();
+          img.onload = function () {
+            var w = img.width, h = img.height;
+            if (w > h && w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; }
+            else if (h >= w && h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; }
+            var cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            cv.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(cv.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = function () { reject(new Error('画像を読み込めません')); };
+          img.src = reader.result;
+        };
+        reader.onerror = function () { reject(new Error('ファイルを読み込めません')); };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    $('mvOk').onclick = confirmMove;
+    $('mvCancel').onclick = exitMoveMode;
+    $('btnSession').onclick = function () {
+      if (currentSession) openSessionEnd(); else openSessionStart();
+    };
+    $('btnSummary').onclick = openSummary;
+    $('btnMapStyle').onclick = cycleMapTheme;
+    $('btnOrdered').classList.toggle('on', orderedOnly);
+    $('btnOrdered').onclick = function () {
+      orderedOnly = !orderedOnly;
+      localStorage.setItem('zipline_orderedonly', orderedOnly ? '1' : '0');
+      this.classList.toggle('on', orderedOnly);
+      renderPins();
+    };
+    $('btnMembers').onclick = openMemberList;
+    $('btnList').onclick = openList;
+    function applyFold(f) {
+      $('top').classList.toggle('folded', f);
+      $('btnFold').textContent = f ? '▼' : '▲';
+      $('btnFold').setAttribute('aria-label', f ? '上のボタンを出す' : '上のボタンをたたむ');
+    }
+    applyFold(localStorage.getItem('zipline_topfold') === '1');
+    $('btnFold').onclick = function () {
+      var f = !$('top').classList.contains('folded');
+      localStorage.setItem('zipline_topfold', f ? '1' : '0');
+      applyFold(f);
+    };
+    $('btnAdd').onclick = function () { addMode = !addMode; updateAddBtn(); };
+    $('btnRefresh').onclick = function () { refreshAll({ force: true }); toast('更新しました'); };
+    $('btnGeo').onclick = toggleGeo;
+    $('btnDone').onclick = function () {
+      showDone = !showDone;
+      this.classList.toggle('on', showDone);
+      setLabel(this, showDone ? '非表示' : L.done);
+      renderPins();
+    };
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && mapReady) refreshAll({});
+    });
+    // v3: ピンはすぐ取りに行く（地図が出るまでに届けばすぐ描く。届く前はスマホに覚えたピンを描く）
+    refreshAll({ initial: true });
+    // 地図の部品は、本体の準備（initMap）ができたこの時点で読み始める
+    (function () {
+      var sc = document.createElement('script');
+      sc.async = true;
+      sc.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(ZL_BOOT.maps_key) + '&callback=initMap&v=weekly';
+      document.head.appendChild(sc);
+    })();
+    // 設定（担当者・エリア・アプリ名など）は裏で新しくし、次に開いたときから使う
+    zlCall('boot', [], ZL_TOKEN).then(function (b) {
+      try { localStorage.setItem(ZL_BOOT_KEY, JSON.stringify(b)); } catch (e) { /* 何もしない */ }
+    }).catch(function (e) { if (e.auth) zlLogout(e.message); });
+  </script>
+  <script>
+    // v3: ログイン（初回と、合札が切れたときだけ）
+    (function () {
+      if (ZL_READY) return;
+      var box = document.getElementById('login'), errEl = document.getElementById('loginErr');
+      box.classList.add('show');
+      var m = /#msg=([^&]*)/.exec(location.hash);
+      if (m) { errEl.textContent = decodeURIComponent(m[1]); history.replaceState(null, '', location.pathname); }
+      function fail(e) { box.classList.remove('busy'); errEl.textContent = e && e.message ? e.message : String(e); }
+      function finish(token) {
+        box.classList.add('busy');
+        return zlCall('boot', [], token).then(function (b) {
+          localStorage.setItem(ZL_TOKEN_KEY, token);
+          localStorage.setItem(ZL_BOOT_KEY, JSON.stringify(b));
+          location.replace(location.pathname);
+        });
+      }
+      if (!window.ZL_API_URL || /YOUR_/.test(window.ZL_API_URL)) { fail(new Error('config.js にサーバーの URL が入っていません')); return; }
+      // 合札はあるが設定が無い（前の版から来たなど）→ 設定だけ取りに行く
+      if (ZL_TOKEN) { finish(ZL_TOKEN).catch(function (e) { localStorage.removeItem(ZL_TOKEN_KEY); fail(e); }); return; }
+      box.classList.add('busy');
+      zlCall('hello').then(function (h) {
+        if (!h.client_id) throw new Error('config シートの oauth_client_id が未設定です');
+        var gs = document.createElement('script');
+        gs.src = 'https://accounts.google.com/gsi/client';
+        gs.onload = function () {
+          google.accounts.id.initialize({
+            client_id: h.client_id,
+            ux_mode: 'popup',
+            auto_select: true,
+            callback: function (resp) {
+              box.classList.add('busy');
+              errEl.textContent = '';
+              zlCall('login', [resp.credential]).then(function (r) { return finish(r.token); }).catch(fail);
+            }
+          });
+          google.accounts.id.renderButton(document.getElementById('gbtn'), { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with', locale: 'ja' });
+          box.classList.remove('busy');
+        };
+        gs.onerror = function () { fail(new Error('Google ログインの部品を読み込めませんでした')); };
+        document.head.appendChild(gs);
+      }).catch(fail);
+    })();
+    // 画面の部品をスマホに保存（2回目からは通信を待たずに開く）
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () { /* 無くても動く */ });
+  </script>
+</body>
+</html>
