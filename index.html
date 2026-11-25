@@ -241,6 +241,8 @@
     .prop-add b { font-size: 20px; line-height: 1; }
     .prop-add input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; font-size: 16px; }
     .prop-add.busy { opacity: .5; pointer-events: none; }
+    /* 写真をドラッグしているとき、落とせる場所を光らせる */
+    .prop-add.drop, .photoBtn.drop { outline: 2px dashed #FACC15; outline-offset: 2px; background: rgba(250, 204, 21, .12); }
     #lightbox { position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .92); display: none;
       align-items: center; justify-content: center; }
     #lightbox.show { display: flex; }
@@ -1117,6 +1119,7 @@
         if (!files.length) return;
         uploadPhotos(p.id, files, input);
       };
+      dropTarget($('photoBtn'), function (files) { uploadPhotos(p.id, files, $('photoInput')); });
     }
 
     // 作業写真の送信: 画面で長辺1600px・JPEG 0.8に縮めてから1回の呼び出しで送る（複数枚でも1回）。
@@ -1178,9 +1181,16 @@
         b.onclick = function () { openLightbox(Number(b.getAttribute('data-i'))); };
       });
       $('propInput').onchange = function () {
-        var input = this, files = Array.prototype.slice.call(input.files || []);
-        if (!files.length) return;
+        uploadPropPhotos(pinId, Array.prototype.slice.call(this.files || []));
+      };
+      dropTarget($('propAdd'), function (files) { uploadPropPhotos(pinId, files); });
+    }
+    function uploadPropPhotos(pinId, files) {
+      {
+        files = (files || []).filter(isImageFile);
+        if (!files.length) { toast('画像ファイルを選んでください'); return; }
         var add = $('propAdd');
+        if (!add) return;
         add.classList.add('busy');
         toast('物件写真を登録中…（' + files.length + '枚）');
         var chain = Promise.resolve([]);
@@ -1190,8 +1200,39 @@
         chain.then(function (urls) { return api('uploadPropertyPhotos', pinId, urls); })
           .then(function (list2) { renderPropPhotos(pinId, list2 || []); toast('物件写真を登録しました'); })
           .catch(function (e) { toast('登録できませんでした: ' + (e && e.message ? e.message : e)); if ($('propAdd')) $('propAdd').classList.remove('busy'); });
-      };
+      }
     }
+
+    // ---- ドラッグ＆ドロップ・貼り付け（パソコン用）----
+    function isImageFile(fl) { return fl && /^image\//.test(fl.type || ''); }
+    function filesOf(dt) { return Array.prototype.slice.call((dt && dt.files) || []).filter(isImageFile); }
+    // el に写真を落とせるようにする。ブラウザが画像を開いてしまわないよう、既定の動きは止める。
+    function dropTarget(el, onFiles) {
+      if (!el) return;
+      el.addEventListener('dragover', function (e) { e.preventDefault(); e.stopPropagation(); el.classList.add('drop'); });
+      el.addEventListener('dragleave', function () { el.classList.remove('drop'); });
+      el.addEventListener('drop', function (e) {
+        e.preventDefault(); e.stopPropagation(); el.classList.remove('drop');
+        var files = filesOf(e.dataTransfer);
+        if (!files.length) { toast('画像ファイルを落としてください'); return; }
+        onFiles(files);
+      });
+    }
+    // 落とす場所を外したときに、ブラウザが画像を開いて画面が消えないようにする
+    window.addEventListener('dragover', function (e) { e.preventDefault(); });
+    window.addEventListener('drop', function (e) { e.preventDefault(); });
+    // 画像の貼り付け（Ctrl+V / ⌘+V）: ピンの詳細を開いているときだけ、そのピンの物件写真に登録する
+    document.addEventListener('paste', function (e) {
+      if (!$('sheet').classList.contains('open') || !$('propAdd') || !propState.pinId) return;
+      var t = e.target && e.target.tagName;
+      if (t === 'INPUT' || t === 'TEXTAREA') return; // 文字の入力欄への貼り付けは邪魔しない
+      var items = Array.prototype.slice.call((e.clipboardData && e.clipboardData.items) || []);
+      var files = items.filter(function (it) { return it.kind === 'file' && /^image\//.test(it.type); })
+        .map(function (it) { return it.getAsFile(); }).filter(Boolean);
+      if (!files.length) return;
+      e.preventDefault();
+      uploadPropPhotos(propState.pinId, files);
+    });
     function openLightbox(i) {
       var n = propState.list.length;
       if (!n) return;
