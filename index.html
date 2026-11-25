@@ -1158,8 +1158,15 @@
 
     // v2.3 物件写真: 詳細にサムネイルを横に並べ、タップで拡大。最後の「＋」で登録（複数枚可）。
     var propState = { pinId: null, list: [], idx: 0 };
-    function propThumb(u, size) {
-      return u.fileId ? 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(u.fileId) + '&sz=' + size : u.url;
+    // 物件写真はサーバーから画像そのものを受け取って出す（スマホで Google にログインしていなくても見える）。
+    // 一度受け取った絵はこの画面を閉じるまで覚えておく。
+    var IMG_CACHE = {};
+    var BLANK_IMG = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+    function propImage(pinId, u, size) {
+      var key = size + ':' + (u.fileId || u.url);
+      if (IMG_CACHE[key]) return Promise.resolve(IMG_CACHE[key]);
+      if (!u.fileId) return Promise.resolve(u.url);
+      return api('getPropertyPhotoImage', pinId, u.fileId, size).then(function (d) { IMG_CACHE[key] = d; return d; });
     }
     function loadPropPhotos(pinId) {
       var box = $('propStrip');
@@ -1174,13 +1181,16 @@
       if (!box) return;
       propState.pinId = pinId; propState.list = list;
       var html = list.map(function (u, i) {
-        return '<button type="button" class="prop-th" data-i="' + i + '"><img loading="lazy" src="' + esc(propThumb(u, 'w200')) + '" alt="物件写真' + (i + 1) + '"></button>';
+        return '<button type="button" class="prop-th" data-i="' + i + '"><img src="' + BLANK_IMG + '" alt="物件写真' + (i + 1) + '"></button>';
       }).join('');
       html += '<label class="prop-add" id="propAdd"><b>＋</b>' + (list.length ? '追加' : '物件写真<br>を登録')
         + '<input id="propInput" type="file" accept="image/*" multiple></label>';
       box.innerHTML = html;
       Array.prototype.forEach.call(box.querySelectorAll('.prop-th'), function (b) {
         b.onclick = function () { openLightbox(Number(b.getAttribute('data-i'))); };
+        var i = Number(b.getAttribute('data-i')), img = b.querySelector('img');
+        propImage(pinId, list[i], 'thumb').then(function (d) { img.src = d; })
+          .catch(function () { img.alt = '読めません'; });
       });
       $('propInput').onchange = function () {
         uploadPropPhotos(pinId, Array.prototype.slice.call(this.files || []));
@@ -1250,7 +1260,12 @@
       if (!n) return;
       propState.idx = (i + n) % n;
       var u = propState.list[propState.idx];
-      $('lbImg').src = propThumb(u, 'w1600');
+      var want = propState.idx, pin = propState.pinId;
+      // まず小さい絵（覚えていれば）を出し、大きい絵が届いたら差し替える
+      $('lbImg').src = IMG_CACHE['thumb:' + (u.fileId || u.url)] || BLANK_IMG;
+      propImage(pin, u, 'full').then(function (d) {
+        if (propState.idx === want && $('lightbox').classList.contains('show')) $('lbImg').src = d;
+      }).catch(function (e) { toast('写真を読めません: ' + (e && e.message ? e.message : e)); });
       $('lbCount').textContent = (propState.idx + 1) + ' / ' + n;
       $('lbPrev').style.display = $('lbNext').style.display = n > 1 ? '' : 'none';
       $('lightbox').classList.add('show');

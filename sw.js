@@ -1,6 +1,6 @@
 // Zipline v3: 画面の部品をスマホに保存しておき、開くときは通信を待たずに出す。
 // 新しい版はその裏で取りに行き、次に開いたときから使う。版を出すたびに CACHE の番号を上げる。
-var CACHE = 'zipline-v3-3';
+var CACHE = 'zipline-v3-4';
 var SHELL = ['./', 'index.html', 'config.js', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', function (e) {
